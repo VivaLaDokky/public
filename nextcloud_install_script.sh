@@ -37,8 +37,7 @@ do
 done
 
 # Install Dependencies
-apt-get update && apt-get upgrade -y
-apt-get install -y php8.2 php8.2-cli php8.2-common php8.2-imap php8.2-redis php8.2-snmp php8.2-xml php8.2-zip php8.2-mbstring php8.2-curl php8.2-gd php8.2-mysql apache2 mariadb-server certbot nfs-common python3-certbot-apache unzip
+apt-get update && apt-get install -y unzip php8.2 php8.2-cli php8.2-common php8.2-imap php8.2-redis php8.2-snmp php8.2-xml php8.2-zip php8.2-mbstring php8.2-curl php8.2-gd php8.2-mysql apache2 mariadb-server certbot python3-certbot-apache nfs-common
 
 # Secure MySQL and Create the database
 DBPASSWORD=$(openssl rand -base64 18)
