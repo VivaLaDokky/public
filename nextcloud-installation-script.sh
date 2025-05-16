@@ -1,4 +1,84 @@
+# Add backup/restore functionality for VM recreation resilience
+echo_status "Setting up backup configuration"
+
+# Create backup directory in the NFS mount
+BACKUP_DIR="$NFS_MOUNT_PATH/nextcloud-backups"
+mkdir -p $BACKUP_DIR
+
+# Set up a script to perform regular backups of the database and config
+cat > /usr/local/bin/nextcloud-backup.sh << EOF
 #!/bin/bash
+# Nextcloud backup script
+TIMESTAMP=\$(date +%Y%m%d_%H%M%S)
+BACKUP_DIR="$BACKUP_DIR"
+DB_USER="$DB_USER"
+DB_PASS="$DB_PASS"
+DB_NAME="$DB_NAME"
+
+# Backup database
+mysqldump -u \$DB_USER -p\$DB_PASS \$DB_NAME > \$BACKUP_DIR/nextcloud-db-\$TIMESTAMP.sql
+
+# Backup configuration
+cp /var/www/nextcloud/config/config.php \$BACKUP_DIR/config-\$TIMESTAMP.php
+
+# Keep only the 5 most recent backups
+ls -t \$BACKUP_DIR/nextcloud-db-* | tail -n +6 | xargs -r rm
+ls -t \$BACKUP_DIR/config-* | tail -n +6 | xargs -r rm
+
+echo "Nextcloud backup completed: \$(date)"
+EOF
+
+chmod +x /usr/local/bin/nextcloud-backup.sh
+
+# Set up a daily cron job for backups
+echo "0 2 * * * root /usr/local/bin/nextcloud-backup.sh > /var/log/nextcloud-backup.log 2>&1" > /etc/cron.d/nextcloud-backup
+
+# Create a file in the NFS mount to help future installations detect this is a remount
+cat > "$NFS_MOUNT_PATH/nextcloud-installation-info.txt" << EOF
+# Nextcloud Installation Information
+Installation Date: $(date)
+Hostname: $HOSTNAME
+Storage Account: $STORAGEACCOUNT
+Container: $CONTAINER
+Database Name: $DB_NAME
+Database User: $DB_USER
+EOF
+
+# Create a restore script for future use
+cat > /usr/local/bin/nextcloud-restore.sh << EOF
+#!/bin/bash
+# Nextcloud restore script for VM recreation
+BACKUP_DIR="$BACKUP_DIR"
+DB_USER="$DB_USER"
+DB_PASS="$DB_PASS"
+DB_NAME="$DB_NAME"
+
+# Find the most recent backup
+LATEST_DB=\$(ls -t \$BACKUP_DIR/nextcloud-db-* | head -n 1)
+LATEST_CONFIG=\$(ls -t \$BACKUP_DIR/config-* | head -n 1)
+
+if [ -z "\$LATEST_DB" ] || [ -z "\$LATEST_CONFIG" ]; then
+    echo "No backups found!"
+    exit 1
+fi
+
+echo "Restoring from \$LATEST_DB and \$LATEST_CONFIG"
+
+# Restore database
+mysql -u \$DB_USER -p\$DB_PASS \$DB_NAME < \$LATEST_DB
+
+# Restore configuration
+cp \$LATEST_CONFIG /var/www/nextcloud/config/config.php
+chown www-data:www-data /var/www/nextcloud/config/config.php
+
+echo "Restoration completed at \$(date)"
+echo "Please run 'sudo -u www-data php /var/www/nextcloud/occ maintenance:data-fingerprint' to refresh file caches"
+EOF
+
+chmod +x /usr/local/bin/nextcloud-restore.sh
+
+# Run initial backup
+/usr/local/bin/nextcloud-backup.sh#!/bin/bash
 
 # Nextcloud Installation Script for Ubuntu with Azure Blob NFS Mount
 # This script installs Nextcloud on an Ubuntu VM and configures it to use Azure Blob Storage via NFS
@@ -108,10 +188,27 @@ apt install -y apache2 mariadb-server libapache2-mod-php php-gd php-json php-mys
     php-curl php-mbstring php-intl php-imagick php-xml php-zip php-bz2 \
     php-bcmath php-gmp unzip nfs-common
 
+# Check if the system needs a reboot (based on your error log)
+if [ -f /var/run/reboot-required ]; then
+    echo_status "WARNING: System requires a reboot"
+    echo "The system indicates that a reboot is required, possibly due to kernel updates."
+    echo "It's recommended to reboot before continuing with Nextcloud installation."
+    echo ""
+    read -p "Continue anyway? (y/n): " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Installation aborted. Please reboot and run the script again."
+        exit 1
+    fi
+fi
+
 # Install Certbot if domain is provided
 if [ ! -z "$DOMAIN" ]; then
     echo_status "Installing Certbot for SSL"
-    apt install -y certbot python3-certbot-apache
+    apt install -y certbot python3-certbot-apache || {
+        echo "Failed to install certbot. Continuing without SSL..."
+        DOMAIN=""
+    }
 fi
 
 # Configure Apache
@@ -147,31 +244,58 @@ echo_status "Configuring MariaDB"
 systemctl start mariadb
 systemctl enable mariadb
 
-# Secure MySQL installation
+# Secure MariaDB installation - compatible with newer MariaDB versions
 echo_status "Securing MariaDB installation"
-mysql -e "UPDATE mysql.user SET Password = PASSWORD('$DB_PASS') WHERE User = 'root'"
-mysql -e "DELETE FROM mysql.user WHERE User = ''"
-mysql -e "DELETE FROM mysql.user WHERE User = 'root' AND Host NOT IN ('localhost', '127.0.0.1', '::1')"
-mysql -e "DROP DATABASE IF EXISTS test"
-mysql -e "DELETE FROM mysql.db WHERE Db = 'test' OR Db = 'test\\_%'"
-mysql -e "FLUSH PRIVILEGES"
+
+# Set root password - using more compatible approach
+mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '$DB_PASS';" || {
+    # Fallback for older MariaDB versions
+    echo "Attempting alternative method for setting root password..."
+    mysql -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('$DB_PASS');" || {
+        # Another fallback method
+        echo "Using mysqladmin to set root password..."
+        mysqladmin -u root password "$DB_PASS"
+    }
+}
+
+# Using root password for subsequent commands
+MYSQL_CMD="mysql -u root -p$DB_PASS"
+
+# Secure the database
+$MYSQL_CMD -e "DELETE FROM mysql.global_priv WHERE User='';" || $MYSQL_CMD -e "DELETE FROM mysql.user WHERE User='';"
+$MYSQL_CMD -e "DELETE FROM mysql.global_priv WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');" || $MYSQL_CMD -e "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');"
+$MYSQL_CMD -e "DROP DATABASE IF EXISTS test;"
+$MYSQL_CMD -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';"
+$MYSQL_CMD -e "FLUSH PRIVILEGES;"
 
 # Create database and user for Nextcloud
 echo_status "Creating Nextcloud database and user"
-mysql -e "CREATE DATABASE $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"
-mysql -e "CREATE USER '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS'"
-mysql -e "GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'localhost'"
-mysql -e "FLUSH PRIVILEGES"
+$MYSQL_CMD -e "CREATE DATABASE $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"
+$MYSQL_CMD -e "CREATE USER '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS';"
+$MYSQL_CMD -e "GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'localhost';"
+$MYSQL_CMD -e "FLUSH PRIVILEGES;"
 
 # Set up the NFS mount for Azure Blob Storage
 echo_status "Setting up NFS mount for Azure Blob Storage"
 mkdir -p $NFS_MOUNT_PATH
 
-# Add the NFS mount to fstab
-echo "$STORAGEACCOUNT.blob.core.windows.net:/$STORAGEACCOUNT/$CONTAINER $NFS_MOUNT_PATH nfs vers=4,minorversion=1,sec=sys,rw 0 0" >> /etc/fstab
+# Add the NFS mount to fstab if not already there
+if ! grep -q "$STORAGEACCOUNT.blob.core.windows.net:/$STORAGEACCOUNT/$CONTAINER" /etc/fstab; then
+    echo "$STORAGEACCOUNT.blob.core.windows.net:/$STORAGEACCOUNT/$CONTAINER $NFS_MOUNT_PATH nfs vers=4,minorversion=1,sec=sys,rw 0 0" >> /etc/fstab
+fi
 
 # Mount the NFS share
-mount $NFS_MOUNT_PATH
+mount $NFS_MOUNT_PATH || {
+    echo_status "WARNING: Failed to mount NFS share"
+    echo "Attempting to mount with different NFS version..."
+    # Try alternative NFS options
+    umount $NFS_MOUNT_PATH 2>/dev/null || true
+    mount -t nfs -o vers=3 "$STORAGEACCOUNT.blob.core.windows.net:/$STORAGEACCOUNT/$CONTAINER" $NFS_MOUNT_PATH || {
+        echo_status "ERROR: Failed to mount NFS share"
+        echo "Please check your Azure Storage Account configuration and ensure NFS access is enabled."
+        exit 1
+    }
+}
 
 # Download and install Nextcloud
 echo_status "Downloading and installing Nextcloud"
@@ -227,16 +351,23 @@ sudo -u www-data php occ config:system:set trusted_domains 3 --value="$IP_ADDRES
 # Configure SSL with Certbot if domain is provided
 if [ ! -z "$DOMAIN" ]; then
     echo_status "Configuring SSL with Certbot"
-    certbot --apache -d "$DOMAIN" --non-interactive --agree-tos --email "$EMAIL" --redirect
+    certbot --apache -d "$DOMAIN" --non-interactive --agree-tos --email "$EMAIL" --redirect || {
+        echo_status "WARNING: SSL configuration failed"
+        echo "Continuing with HTTP only configuration..."
+        # Reset domain to indicate SSL failed
+        DOMAIN=""
+    }
     
-    # Force HTTPS in Nextcloud
-    sudo -u www-data php occ config:system:set overwriteprotocol --value="https"
-    
-    # Enable HTTP Strict Transport Security
-    sudo -u www-data php occ config:system:set hsts --value="true"
-    sudo -u www-data php occ config:system:set hstsMaxAge --value="31536000"
-    sudo -u www-data php occ config:system:set hstsIncludeSubdomains --value="true"
-    sudo -u www-data php occ config:system:set hstsPreload --value="true"
+    if [ ! -z "$DOMAIN" ]; then
+        # Force HTTPS in Nextcloud
+        sudo -u www-data php occ config:system:set overwriteprotocol --value="https"
+        
+        # Enable HTTP Strict Transport Security
+        sudo -u www-data php occ config:system:set hsts --value="true"
+        sudo -u www-data php occ config:system:set hstsMaxAge --value="31536000"
+        sudo -u www-data php occ config:system:set hstsIncludeSubdomains --value="true"
+        sudo -u www-data php occ config:system:set hstsPreload --value="true"
+    fi
 fi
 
 # Display completion message
