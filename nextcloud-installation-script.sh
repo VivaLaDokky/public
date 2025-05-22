@@ -68,6 +68,9 @@ else
 fi
 
 # --- Install Dependencies ---
+sudo apt update
+sudo apt install -y software-properties-common lsb-release ca-certificates apt-transport-https
+sudo add-apt-repository -y ppa:ondrej/php
 echo "--- Updating package lists and upgrading existing packages ---"
 apt-get update
 apt-get upgrade -y
