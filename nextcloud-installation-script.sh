@@ -82,6 +82,16 @@ apt-get install -y \
     php8.2-xml php8.2-zip php8.2-mbstring php8.2-curl php8.2-gd php8.2-mysql \
     apache2 mariadb-server certbot nfs-common python3-certbot-apache unzip
 
+# --- Raise PHP memory limit to 1024M ---
+PHP_INI="/etc/php/8.2/apache2/php.ini"
+
+if [ -f "$PHP_INI" ]; then
+  echo "--- Setting PHP memory limit to 1024M in $PHP_INI ---"
+  sed -i 's/^memory_limit\s*=.*/memory_limit = 1024M/' "$PHP_INI"
+else
+  echo "WARNING: PHP config file $PHP_INI not found. Memory limit not updated."
+fi
+
 # --- Create the database and user for Nextcloud ---
 echo "--- Configuring MariaDB for Nextcloud ---"
 DBPASSWORD=$(openssl rand -base64 14) # Generate a random password for the database user
