@@ -94,9 +94,9 @@ if [ -n "$STORAGEACCOUNT" ] && [ -n "$CONTAINER" ]; then
     echo "--- Mounting Azure File Storage via NFS ---"
     mkdir -p /mnt/files
     # Check if the mount point is already in fstab to avoid duplicates
-    if ! grep -q "$STORAGEACCOUNT.blob.core.windows.net:/$STORAGEACCOUNT/$CONTAINER" /etc/fstab; then
+    if ! grep -q "$STORAGEACCOUNT.privatelink.blob.core.windows.net:/$STORAGEACCOUNT/$CONTAINER" /etc/fstab; then
         # Using single spaces for fstab entry clarity
-        echo "$STORAGEACCOUNT.blob.core.windows.net:/$STORAGEACCOUNT/$CONTAINER /mnt/files nfs defaults,sec=sys,vers=3,nolock,proto=tcp,nofail 0 0" >> /etc/fstab
+        echo "$STORAGEACCOUNT.privatelink.blob.core.windows.net:/$STORAGEACCOUNT/$CONTAINER /mnt/files nfs defaults,sec=sys,vers=3,nolock,proto=tcp,nofail 0 0" >> /etc/fstab
         echo "Added NFS mount to /etc/fstab."
     else
         echo "NFS mount already exists in /etc/fstab."
