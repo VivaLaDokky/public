@@ -203,8 +203,6 @@ tee "$NEXTCLOUD_APACHE_CONF" << EOF
     ServerName $DNSNAME
     DocumentRoot /var/www/html/nextcloud/
 
-    Alias /nextcloud "/var/www/html/nextcloud/" # Optional, as DocumentRoot should suffice
-
     <Directory /var/www/html/nextcloud/>
         Require all granted
         Options FollowSymlinks MultiViews
