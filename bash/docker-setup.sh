@@ -16,7 +16,7 @@ for i in "$@"; do
 		--pip=*)
 			PUBLICIP="${i#*=}"
 			;;
-   		--user=*)
+   		--username=*)
      			TARGETUSER="${i#*=}"
 		*)
 			echo "Warning: Unknown option $i"
@@ -26,7 +26,7 @@ done
 
 echo "Server Hostname (local): $HOSTNAME"
 echo "Public IP Address (for access & SSL): $PUBLICIP"
-echo "The Local User to be Used is: $TARGETUSER"
+echo "The Local User name is: $TARGETUSER"
 
 # --- Prerequisites ---
 echo "Installing prerequisites..."
