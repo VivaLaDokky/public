@@ -1,0 +1,22 @@
+# Docker Compose for NGINX-Proxy-Manager with custom network proxy_network
+
+services:
+  app:
+    image: 'jc21/nginx-proxy-manager:latest'
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '81:81'
+    environment:
+      # Example of valid mapping (can replace or remove)
+      DISABLE_IPV6: 'true'
+    volumes:
+      - ./data:/data
+      - ./letsencrypt:/etc/letsencrypt
+    networks:
+      - proxy_network
+
+networks:
+  proxy_network:
+    external: true
