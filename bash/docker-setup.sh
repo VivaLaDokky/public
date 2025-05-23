@@ -5,6 +5,8 @@
 
 set -e
 
+export DEBIAN_FRONTEND=noninteractive  # Prevents TTY prompts from apt
+
 # --- Parse Arguments ---
 for i in "$@"; do
 	case $i in
@@ -14,6 +16,8 @@ for i in "$@"; do
 		--pip=*)
 			PUBLICIP="${i#*=}"
 			;;
+   		--user=*)
+     			TARGETUSER="${i#*=}"
 		*)
 			echo "Warning: Unknown option $i"
 			;;
@@ -22,6 +26,7 @@ done
 
 echo "Server Hostname (local): $HOSTNAME"
 echo "Public IP Address (for access & SSL): $PUBLICIP"
+echo "The Local User to be Used is: $TARGETUSER"
 
 # --- Prerequisites ---
 echo "Installing prerequisites..."
@@ -46,9 +51,8 @@ sudo apt-get update -y
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
 # --- Add User to Docker Group ---
-TARGET_USER=$(logname)
-echo "Adding user '$TARGET_USER' to the docker group..."
-sudo usermod -aG docker "$TARGET_USER"
+echo "Adding user '$TARGETUSER' to the docker group..."
+sudo usermod -aG docker "$TARGETUSER"
 
 # --- Docker Compose Folder Setup ---
 echo "Setting up Docker Compose directories..."
@@ -73,7 +77,7 @@ sudo docker compose -f "$BASE_COMPOSE_DIR/nginx-manager/docker-compose.yml" up -
 sudo docker compose -f "$BASE_COMPOSE_DIR/portainer/docker-compose.yml" up -d
 
 # Get Portainer container IP
-PORTAINER_CONTAINER=$(sudo docker ps --filter "name=portainer" --format "{{.ID}}" | head -n 1)
+PORTAINER_CONTAINER=$(sudo docker ps --filter "name=^/portainer$" --format "{{.ID}}")
 PORTAINER_IP=$(sudo docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$PORTAINER_CONTAINER")
 
 # Output
