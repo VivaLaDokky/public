@@ -72,6 +72,13 @@ echo "Launching NGINX Proxy Manager and Portainer..."
 sudo docker compose -f "$BASE_COMPOSE_DIR/nginx-manager/docker-compose.yml" up -d
 sudo docker compose -f "$BASE_COMPOSE_DIR/portainer/docker-compose.yml" up -d
 
+# Get Portainer container IP
+PORTAINER_CONTAINER=$(sudo docker ps --filter "name=portainer" --format "{{.ID}}" | head -n 1)
+PORTAINER_IP=$(sudo docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$PORTAINER_CONTAINER")
+
+# Output
+echo "🖥️  Portainer container internal IP: $PORTAINER_IP"
+
 # --- Done ---
 echo
 echo "✅ Script complete."
