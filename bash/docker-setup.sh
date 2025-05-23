@@ -18,6 +18,7 @@ for i in "$@"; do
 			;;
    		--username=*)
      			TARGETUSER="${i#*=}"
+			;;
 		*)
 			echo "Warning: Unknown option $i"
 			;;
