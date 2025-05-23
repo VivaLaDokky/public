@@ -87,7 +87,7 @@ echo "🖥️  Portainer container internal IP: $PORTAINER_IP, add this in NGINX
 # --- Done ---
 echo
 echo "✅ Script complete."
-echo "➡️ NGINX Proxy Manager should be reachable at: http://$PUBLICIP:81 or DNS Label"
-echo "🛠️ Portainer UI is not accessible before you forward $PORTAINER_IP and forward port 9000 in NGINX"
+echo "➡️ NGINX Proxy Manager should be reachable at: http://$PUBLICIP:81 or DNS Label:81"
+echo "🛠️ Portainer UI is not accessible before you forward $PORTAINER_IP:9000 in NGINX"
 echo "👤 Default credentials for NGINX: username 'admin@example.com', password 'changeme'"
 echo "🔄 Please log out and back in (or reboot) for Docker permissions to take effect."
