@@ -77,7 +77,7 @@ PORTAINER_CONTAINER=$(sudo docker ps --filter "name=portainer" --format "{{.ID}}
 PORTAINER_IP=$(sudo docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$PORTAINER_CONTAINER")
 
 # Output
-echo "🖥️  Portainer container internal IP: $PORTAINER_IP"
+echo "🖥️  Portainer container internal IP: $PORTAINER_IP, add this in NGINX"
 
 # --- Done ---
 echo
