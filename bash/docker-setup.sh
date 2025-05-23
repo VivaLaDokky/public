@@ -56,7 +56,7 @@ sudo usermod -aG docker "$TARGETUSER"
 
 # --- Docker Compose Folder Setup ---
 echo "Setting up Docker Compose directories..."
-BASE_COMPOSE_DIR="/lib/docker-compose"
+BASE_COMPOSE_DIR="/opt/docker-compose"
 sudo mkdir -p "$BASE_COMPOSE_DIR/nginx-manager"
 sudo mkdir -p "$BASE_COMPOSE_DIR/portainer"
 
