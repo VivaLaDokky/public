@@ -1,0 +1,21 @@
+# Docker Compose for Portainer with custom network proxy_network
+services:
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: unless-stopped
+    ports:
+      - "9000:9000"     # Web UI
+      - "8000:8000"     # Optional Edge Agent port
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock  # Gives Portainer access to the Docker daemon
+      - portainer_data:/data                       # Persists Portainer settings
+    networks:
+      - proxy_network  # optional if you're using a custom network like Nginx Proxy Manager
+
+volumes:
+  portainer_data:
+
+networks:
+  proxy_network:
+    external: true     # Remove this if you want Compose to create the network itself
