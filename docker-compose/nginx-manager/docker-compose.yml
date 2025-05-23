@@ -1,5 +1,4 @@
 # Docker Compose for NGINX-Proxy-Manager with custom network proxy_network
-
 services:
   app:
     image: 'jc21/nginx-proxy-manager:latest'
