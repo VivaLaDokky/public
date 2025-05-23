@@ -4,9 +4,9 @@
 # It installs necessary dependencies, configures the database, mounts file storage,
 # installs Nextcloud, configures Apache, and sets up SSL with Let's Encrypt.
 
-export DEBIAN_FRONTEND=noninteractive
-
 set -e
+
+export DEBIAN_FRONTEND=noninteractive  # Prevents TTY prompts from apt
 
 # --- Configuration Variables ---
 # These variables can be overridden by command-line arguments.
